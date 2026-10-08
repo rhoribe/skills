@@ -144,7 +144,11 @@ if [ "$OS_TYPE" = "Linux" ] && [ "$SCOPE" != "user" ]; then
         $RUN_AS_SUDO unattended-upgrade -v
       else
         log_warn "unattended-upgrade not found; upgrading security packages via apt-get upgrade..."
-        $RUN_AS_SUDO apt-get --only-upgrade install -y $(apt-get --just-print upgrade 2>/dev/null | grep -i security | awk '{print $2}' || true) || true
+        SEC_PKGS="$(apt-get --just-print upgrade 2>/dev/null | awk '/^Inst / && /security/ {print $2}' | grep -E '^[a-zA-Z0-9._+-]+$' | tr '\n' ' ' || true)"
+        if [ -n "$SEC_PKGS" ]; then
+          # shellcheck disable=SC2086
+          $RUN_AS_SUDO apt-get --only-upgrade install -y $SEC_PKGS
+        fi
       fi
     else
       $RUN_AS_SUDO apt-get update
@@ -315,7 +319,7 @@ if [ "$OS_TYPE" = "Linux" ]; then
     echo -e "${YELLOW}[NOTICE]${RESET} System reboot is required (flag file /var/run/reboot-required present)."
     if [ -f /var/run/reboot-required.pkgs ]; then
       echo "Triggered by packages:"
-      sed 's/^/  - /' /var/run/reboot-required.pkgs
+      tr -cd '[:alnum:] ._/:+-\n' < /var/run/reboot-required.pkgs | sed 's/^/  - /'
     fi
   elif command -v needs-restarting >/dev/null 2>&1; then
     if ! needs-restarting -r >/dev/null 2>&1; then

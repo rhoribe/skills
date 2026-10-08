@@ -108,7 +108,7 @@ elif [ "$OS_TYPE" = "Linux" ]; then
   if [ -f /var/run/reboot-required ]; then
     REBOOT_REQUIRED=true
     if [ -f /var/run/reboot-required.pkgs ]; then
-      REBOOT_REASON="$(tr '\n' ' ' < /var/run/reboot-required.pkgs | sed 's/ $//')"
+      REBOOT_REASON="$(tr -cd '[:alnum:] ._/:+-\n' < /var/run/reboot-required.pkgs | tr '\n' ' ' | sed 's/ $//')"
     else
       REBOOT_REASON="reboot-required flag present"
     fi

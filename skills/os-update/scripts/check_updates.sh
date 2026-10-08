@@ -36,6 +36,15 @@ log_info() {
 }
 
 # ------------------------------------------------------------------------------
+# Sanitization Helper (W011 Mitigation)
+# Strips ANSI escape codes, control characters, limits length, and filters out
+# outsider-authored text so only structured package tokens reach context.
+# ------------------------------------------------------------------------------
+sanitize_pkg_output() {
+  sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' | tr -cd '[:alnum:] ._/:@+~()<>=#,-\n' | awk '{ if (length($0) > 120) print substr($0, 1, 120) "..."; else print $0 }'
+}
+
+# ------------------------------------------------------------------------------
 # APT (Debian, Ubuntu, etc.)
 # ------------------------------------------------------------------------------
 APT_COUNT=0
@@ -53,8 +62,11 @@ if command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then
   if command -v apt >/dev/null 2>&1; then
     APT_LIST="$(apt list --upgradable 2>/dev/null | grep -v 'Listing\.\.\.' || true)"
     if [ -n "$APT_LIST" ]; then
-      APT_COUNT="$(echo "$APT_LIST" | grep -c . || true)"
-      APT_PKGS="$(echo "$APT_LIST" | head -n 30)"
+      APT_CLEAN="$(echo "$APT_LIST" | awk -F'/' 'NF>=2 {split($2, p, " "); print $1 " (" p[1] ")"} NF==1 {print $1}' | sanitize_pkg_output || true)"
+      if [ -n "$APT_CLEAN" ]; then
+        APT_COUNT="$(echo "$APT_CLEAN" | grep -c . || true)"
+        APT_PKGS="$(echo "$APT_CLEAN" | head -n 30)"
+      fi
     fi
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + APT_COUNT))
@@ -76,8 +88,11 @@ if command -v dnf >/dev/null 2>&1; then
   DNF_EXIT=$?
   set -e
   if [ "$DNF_EXIT" -eq 100 ] && [ -n "$DNF_RAW" ]; then
-    DNF_COUNT="$(echo "$DNF_RAW" | grep -v '^$' | grep -v 'Last metadata expiration' | grep -c . || true)"
-    DNF_PKGS="$(echo "$DNF_RAW" | head -n 30)"
+    DNF_CLEAN="$(echo "$DNF_RAW" | grep -v '^$' | grep -v 'Last metadata expiration' | awk '{print $1, "(" $2 ")"}' | sanitize_pkg_output || true)"
+    if [ -n "$DNF_CLEAN" ]; then
+      DNF_COUNT="$(echo "$DNF_CLEAN" | grep -c . || true)"
+      DNF_PKGS="$(echo "$DNF_CLEAN" | head -n 30)"
+    fi
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + DNF_COUNT))
 fi
@@ -94,16 +109,18 @@ if command -v pacman >/dev/null 2>&1; then
     PACMAN_RAW="$(checkupdates 2>/dev/null)"
     set -e
     if [ -n "$PACMAN_RAW" ]; then
-      PACMAN_COUNT="$(echo "$PACMAN_RAW" | grep -c . || true)"
-      PACMAN_PKGS="$(echo "$PACMAN_RAW" | head -n 30)"
+      PACMAN_CLEAN="$(echo "$PACMAN_RAW" | awk '{print $1, "(" $2 " -> " $4 ")"}' | sanitize_pkg_output || true)"
+      PACMAN_COUNT="$(echo "$PACMAN_CLEAN" | grep -c . || true)"
+      PACMAN_PKGS="$(echo "$PACMAN_CLEAN" | head -n 30)"
     fi
   else
     set +e
     PACMAN_RAW="$(pacman -Qu 2>/dev/null)"
     set -e
     if [ -n "$PACMAN_RAW" ]; then
-      PACMAN_COUNT="$(echo "$PACMAN_RAW" | grep -c . || true)"
-      PACMAN_PKGS="$(echo "$PACMAN_RAW" | head -n 30)"
+      PACMAN_CLEAN="$(echo "$PACMAN_RAW" | awk '{print $1, "(" $2 " -> " $4 ")"}' | sanitize_pkg_output || true)"
+      PACMAN_COUNT="$(echo "$PACMAN_CLEAN" | grep -c . || true)"
+      PACMAN_PKGS="$(echo "$PACMAN_CLEAN" | head -n 30)"
     fi
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + PACMAN_COUNT))
@@ -120,8 +137,9 @@ if command -v zypper >/dev/null 2>&1; then
   ZYPPER_RAW="$(zypper list-updates -t package 2>/dev/null | grep -E '^v ' || true)"
   set -e
   if [ -n "$ZYPPER_RAW" ]; then
-    ZYPPER_COUNT="$(echo "$ZYPPER_RAW" | grep -c . || true)"
-    ZYPPER_PKGS="$(echo "$ZYPPER_RAW" | head -n 30)"
+    ZYPPER_CLEAN="$(echo "$ZYPPER_RAW" | awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $3); gsub(/^[ \t]+|[ \t]+$/, "", $4); gsub(/^[ \t]+|[ \t]+$/, "", $5); if ($3 != "") print $3, "(" $4 " -> " $5 ")"}' | sanitize_pkg_output || true)"
+    ZYPPER_COUNT="$(echo "$ZYPPER_CLEAN" | grep -c . || true)"
+    ZYPPER_PKGS="$(echo "$ZYPPER_CLEAN" | head -n 30)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + ZYPPER_COUNT))
 fi
@@ -137,8 +155,9 @@ if command -v softwareupdate >/dev/null 2>&1; then
   SW_RAW="$(softwareupdate -l 2>&1 || true)"
   set -e
   if echo "$SW_RAW" | grep -qi "Software Update found the following"; then
+    MACOS_SYS_CLEAN="$(echo "$SW_RAW" | grep -E '^\* |Title:' | sed 's/^[ *]*//' | awk -F',' '{print $1}' | sanitize_pkg_output || true)"
     MACOS_SYS_COUNT="$(echo "$SW_RAW" | grep -c '^\* ' || true)"
-    MACOS_SYS_PKGS="$(echo "$SW_RAW" | grep -E '^\* |Title:' | head -n 20 || true)"
+    MACOS_SYS_PKGS="$(echo "$MACOS_SYS_CLEAN" | head -n 20)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + MACOS_SYS_COUNT))
 fi
@@ -157,8 +176,9 @@ if command -v brew >/dev/null 2>&1; then
   BREW_RAW="$(brew outdated --verbose 2>/dev/null || true)"
   set -e
   if [ -n "$BREW_RAW" ]; then
-    BREW_COUNT="$(echo "$BREW_RAW" | grep -c . || true)"
-    BREW_PKGS="$(echo "$BREW_RAW" | head -n 30)"
+    BREW_CLEAN="$(echo "$BREW_RAW" | awk '{print $1, "(" $2 " < " $4 ")"}' | sanitize_pkg_output || true)"
+    BREW_COUNT="$(echo "$BREW_CLEAN" | grep -c . || true)"
+    BREW_PKGS="$(echo "$BREW_CLEAN" | head -n 30)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + BREW_COUNT))
 fi
@@ -174,8 +194,9 @@ if command -v mas >/dev/null 2>&1; then
   MAS_RAW="$(mas outdated 2>/dev/null || true)"
   set -e
   if [ -n "$MAS_RAW" ]; then
-    MAS_COUNT="$(echo "$MAS_RAW" | grep -c . || true)"
-    MAS_PKGS="$(echo "$MAS_RAW" | head -n 20)"
+    MAS_CLEAN="$(echo "$MAS_RAW" | awk '{print $1, $2, "(" $3 " -> " $4 ")"}' | sanitize_pkg_output || true)"
+    MAS_COUNT="$(echo "$MAS_CLEAN" | grep -c . || true)"
+    MAS_PKGS="$(echo "$MAS_CLEAN" | head -n 20)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + MAS_COUNT))
 fi
@@ -191,8 +212,9 @@ if command -v flatpak >/dev/null 2>&1; then
   FLATPAK_RAW="$(flatpak remote-ls --updates 2>/dev/null || true)"
   set -e
   if [ -n "$FLATPAK_RAW" ]; then
-    FLATPAK_COUNT="$(echo "$FLATPAK_RAW" | grep -c . || true)"
-    FLATPAK_PKGS="$(echo "$FLATPAK_RAW" | head -n 20)"
+    FLATPAK_CLEAN="$(echo "$FLATPAK_RAW" | awk '{print $1, $2, "(" $3 ")"}' | sanitize_pkg_output || true)"
+    FLATPAK_COUNT="$(echo "$FLATPAK_CLEAN" | grep -c . || true)"
+    FLATPAK_PKGS="$(echo "$FLATPAK_CLEAN" | head -n 20)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + FLATPAK_COUNT))
 fi
@@ -208,8 +230,9 @@ if command -v snap >/dev/null 2>&1; then
   SNAP_RAW="$(snap refresh --list 2>/dev/null || true)"
   set -e
   if [ -n "$SNAP_RAW" ] && ! echo "$SNAP_RAW" | grep -qi "All snaps up to date"; then
-    SNAP_COUNT="$(echo "$SNAP_RAW" | tail -n +2 | grep -c . || true)"
-    SNAP_PKGS="$(echo "$SNAP_RAW" | tail -n +2 | head -n 20 || true)"
+    SNAP_CLEAN="$(echo "$SNAP_RAW" | tail -n +2 | awk '{print $1, "(" $2 ")"}' | sanitize_pkg_output || true)"
+    SNAP_COUNT="$(echo "$SNAP_CLEAN" | grep -c . || true)"
+    SNAP_PKGS="$(echo "$SNAP_CLEAN" | head -n 20)"
   fi
   TOTAL_PENDING=$((TOTAL_PENDING + SNAP_COUNT))
 fi
