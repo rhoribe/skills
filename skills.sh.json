@@ -1,0 +1,13 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "System Administration",
+      "description": "Safe operating system and package updates for Linux and macOS.",
+      "skills": [
+        "os-update"
+      ]
+    }
+  ]
+}
