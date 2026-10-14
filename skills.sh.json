@@ -3,6 +3,13 @@
   "notGrouped": "bottom",
   "groupings": [
     {
+      "title": "Cloud & Infrastructure",
+      "description": "Visualize and diagram cloud architecture topologies directly from IaC (Terraform, CloudFormation, Bicep, Ansible).",
+      "skills": [
+        "iac-topology"
+      ]
+    },
+    {
       "title": "System Administration",
       "description": "Safe operating system and package updates for Linux and macOS.",
       "skills": [

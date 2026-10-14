@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*$py.class
+output_test/
+diagrams/
+.DS_Store

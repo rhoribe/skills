@@ -1,0 +1,33 @@
+---
+- name: Deploy AWS Infrastructure
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Create VPC
+      amazon.aws.ec2_vpc_net:
+        name: ansible-vpc
+        cidr_block: 10.100.0.0/16
+        region: us-east-1
+      register: vpc_out
+
+    - name: Create Web EC2 Instance
+      amazon.aws.ec2_instance:
+        name: web-app-node
+        image_id: ami-12345678
+        instance_type: t3.micro
+        vpc_id: ansible-vpc
+      register: ec2_out
+
+    - name: Deploy RDS Database
+      amazon.aws.rds_instance:
+        id: ansible-postgres-db
+        engine: postgres
+        instance_type: db.t3.micro
+        vpc_id: ansible-vpc
+      register: rds_out
+
+    - name: Create Backup S3 Bucket
+      amazon.aws.s3_bucket:
+        name: ansible-backup-vault
+        state: present
+      register: s3_out

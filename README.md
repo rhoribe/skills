@@ -18,7 +18,8 @@ npx skills add rhoribe/skills
 # Instalação global (disponível em todos os seus projetos e agentes):
 npx skills add rhoribe/skills -g
 
-# Instalar apenas a skill os-update:
+# Instalar uma skill específica:
+npx skills add rhoribe/skills --skill iac-topology
 npx skills add rhoribe/skills --skill os-update
 
 # Instalar para agentes específicos (ex: Claude Code, Antigravity e Cursor):
@@ -29,16 +30,37 @@ npx skills add rhoribe/skills --agent claude-code antigravity cursor
 
 ## 📦 Skills Disponíveis
 
-| Skill | Descrição | Plataformas |
+| Skill | Descrição | Formatos & Plataformas |
 |---|---|---|
+| [`iac-topology`](./skills/iac-topology/SKILL.md) | Gera diagramas e desenhos de topologia de arquitetura em nuvem diretamente de código IaC (**Terraform**, **CloudFormation**, **Azure Bicep**, **Ansible**, **Kubernetes**), exportando para **Excalidraw**, **Draw.io** e **Mermaid**. | **Excalidraw** (`.excalidraw`), **Draw.io** (`.drawio`), **Mermaid** (`.mmd`) / Multiplataforma |
 | [`os-update`](./skills/os-update/SKILL.md) | Fluxo automatizado e seguro (*dry-run first*) para inspecionar, preparar e aplicar atualizações de SO e pacotes com diagnósticos de segurança e alerta de reboot. | **Linux** (Debian, Ubuntu, Fedora, RHEL, Arch, openSUSE, Alpine, Flatpak, Snap) & **macOS** (`softwareupdate`, Homebrew, MAS) |
 
 ---
 
-## 🛠️ Arquitetura da Skill `os-update`
+## 🛠️ Arquitetura das Skills
 
-A skill implementa a especificação oficial de **Agent Skills** ([agentskills.io](https://agentskills.io)) com divulgação progressiva (*progressive disclosure*):
+As skills implementam a especificação oficial de **Agent Skills** ([agentskills.io](https://agentskills.io)) com divulgação progressiva (*progressive disclosure*):
 
+### 1. `iac-topology`
+```text
+skills/iac-topology/
+├── SKILL.md                          # Instruções para o agente (5 fases de execução)
+├── scripts/                          # Utilitários de parsing e renderização de diagramas
+│   ├── parse_iac.py                  # Parser universal (Terraform, CloudFormation, Bicep, Ansible, K8s)
+│   ├── generate_excalidraw.py        # Gerador nativo Excalidraw v2 com auto-layout e paletas por nuvem
+│   ├── generate_drawio.py            # Gerador nativo Draw.io / mxGraphModel com swimlanes e nós estilizados
+│   ├── generate_mermaid.py           # Gerador de flowcharts Mermaid para preview imediato em Markdown
+│   └── iac_topology.sh               # CLI unificada para geração de diagramas
+└── references/                       # Guias de parsing e especificações de formato
+    ├── terraform.md                  # HCL, módulos, recursos e terraform show -json
+    ├── cloudformation.md             # Templates YAML/JSON, Ref, Fn::GetAtt e DependsOn
+    ├── bicep.md                      # Recursos Bicep, módulos e ARM templates
+    ├── ansible.md                    # Módulos cloud para AWS, Azure, GCP e Docker
+    ├── excalidraw-spec.md            # Especificação do schema JSON do Excalidraw
+    └── drawio-spec.md                # Especificação XML do mxGraphModel do Draw.io
+```
+
+### 2. `os-update`
 ```text
 skills/os-update/
 ├── SKILL.md                          # Instruções para o agente (5 fases de execução)
@@ -55,42 +77,6 @@ skills/os-update/
 
 ---
 
-## 🚀 Como Publicar no `skills.sh`
-
-Este repositório já está configurado com o [`skills.sh.json`](./skills.sh.json) e a estrutura exigida pelo indexador do **skills.sh**.
-
-### Passo a passo para publicação:
-
-1. **Commit e Push para o GitHub**:
-   ```bash
-   git add .
-   git commit -m "feat: add os-update skill and skills.sh configuration"
-   git push -u origin main
-   ```
-
-2. **Garantir que o repositório é Público**:
-   - Acesse o repositório no GitHub: `https://github.com/rhoribe/skills`
-   - Certifique-se de que a visibilidade está configurada como **Public**.
-
-3. **Adicionar Tópicos (Topics) no GitHub**:
-   No menu lateral direito do seu repositório no GitHub ("About" ⚙️), adicione as seguintes tags para acelerar a descoberta e categorização:
-   - `skills-sh`
-   - `agent-skills`
-   - `ai-agents`
-   - `antigravity`
-   - `os-update`
-   - `sysadmin`
-
-4. **Indexação Automática**:
-   O `skills.sh` indexa o repositório assim que a primeira instalação ocorrer via CLI ou ao ser consultado:
-   ```bash
-   npx skills add rhoribe/skills -l
-   ```
-   A página do repositório ficará disponível publicamente em:
-   `https://skills.sh/rhoribe/skills`
-
----
-
 ## 💻 Uso Local e Desenvolvimento
 
 ### No Google Antigravity
@@ -103,7 +89,22 @@ O repositório inclui [`.agents/skills.json`](./.agents/skills.json), garantindo
 }
 ```
 
-### Execução Manual dos Scripts (Sem Agente)
+### Execução dos Utilitários da Skill `iac-topology`
+```bash
+# Gerar todos os formatos (Excalidraw, Draw.io e Mermaid) para um diretório Terraform:
+./skills/iac-topology/scripts/iac_topology.sh ./meu-projeto/terraform/ --output-dir ./diagramas
+
+# Gerar arquivo Excalidraw a partir de um template CloudFormation:
+./skills/iac-topology/scripts/iac_topology.sh template.yaml --format excalidraw
+
+# Gerar arquivo Draw.io (.drawio) a partir de um arquivo Azure Bicep:
+./skills/iac-topology/scripts/iac_topology.sh main.bicep --format drawio --title "Arquitetura Azure"
+
+# Gerar diagrama a partir de playbooks Ansible:
+./skills/iac-topology/scripts/iac_topology.sh playbook.yml --format all
+```
+
+### Execução dos Utilitários da Skill `os-update`
 ```bash
 # Detectar ambiente:
 ./skills/os-update/scripts/detect_os.sh
@@ -113,10 +114,39 @@ O repositório inclui [`.agents/skills.json`](./.agents/skills.json), garantindo
 
 # Simular atualização (dry-run):
 ./skills/os-update/scripts/update_system.sh --dry-run
-
-# Executar atualização com limpeza de cache:
-./skills/os-update/scripts/update_system.sh --clean
 ```
+
+---
+
+## 🚀 Como Publicar no `skills.sh`
+
+Este repositório já está configurado com o [`skills.sh.json`](./skills.sh.json) e a estrutura exigida pelo indexador do **skills.sh**.
+
+### Passo a passo para publicação:
+
+1. **Commit e Push para o GitHub**:
+   ```bash
+   git add .
+   git commit -m "feat: add iac-topology skill for Excalidraw and Draw.io diagrams"
+   git push -u origin main
+   ```
+
+2. **Garantir que o repositório é Público**:
+   - Acesse o repositório no GitHub: `https://github.com/rhoribe/skills`
+   - Certifique-se de que a visibilidade está configurada como **Public**.
+
+3. **Adicionar Tópicos (Topics) no GitHub**:
+   No menu lateral direito do seu repositório no GitHub ("About" ⚙️), adicione as seguintes tags:
+   - `skills-sh`
+   - `agent-skills`
+   - `iac`
+   - `terraform`
+   - `cloudformation`
+   - `bicep`
+   - `ansible`
+   - `excalidraw`
+   - `drawio`
+   - `os-update`
 
 ---
 
