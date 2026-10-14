@@ -28,6 +28,7 @@ from parse_iac import IaCParser
 from generate_excalidraw import ExcalidrawGenerator
 from generate_drawio import DrawioGenerator
 from generate_mermaid import MermaidGenerator
+from icons import get_icon, ICONS_SVG
 
 
 class TestIaCTopology(unittest.TestCase):
@@ -124,6 +125,14 @@ class TestIaCTopology(unittest.TestCase):
 
         self.assertIn("rectangle", element_types)
         self.assertIn("text", element_types)
+        self.assertIn("image", element_types)
+
+        # Ensure files map contains valid SVG Data URLs
+        self.assertIn("files", excal)
+        self.assertGreater(len(excal["files"]), 0)
+        for fid, fval in excal["files"].items():
+            self.assertEqual(fval["mimeType"], "image/svg+xml")
+            self.assertTrue(fval["dataURL"].startswith("data:image/svg+xml;base64,"))
 
     def test_drawio_generation(self):
         tf_file = FIXTURES_DIR / "aws_vpc.tf"
@@ -144,6 +153,13 @@ class TestIaCTopology(unittest.TestCase):
         cells = model.find("root").findall("mxCell")
         self.assertGreater(len(cells), 5)
 
+        # Check that icon cells exist with embedded image styles
+        icon_cells = [c for c in cells if c.attrib.get("id", "").startswith("icon_")]
+        self.assertGreater(len(icon_cells), 0)
+        for ic in icon_cells:
+            self.assertIn("shape=image", ic.attrib.get("style", ""))
+            self.assertIn("data:image/svg+xml;base64,", ic.attrib.get("style", ""))
+
     def test_mermaid_generation(self):
         tf_file = FIXTURES_DIR / "aws_vpc.tf"
         parser = IaCParser()
@@ -156,6 +172,23 @@ class TestIaCTopology(unittest.TestCase):
         self.assertTrue(mmd.startswith("flowchart TD"))
         self.assertIn("subgraph", mmd)
         self.assertIn("classDef", mmd)
+        # Check that icons and cloud badges are included
+        self.assertIn("fa:fa-", mmd)
+        self.assertIn("☁️", mmd)
+
+    def test_cloud_icons_registry(self):
+        providers = ["aws", "azure", "gcp", "kubernetes", "generic"]
+        categories = ["compute", "database", "storage", "network", "security", "messaging"]
+        for p in providers:
+            for c in categories:
+                icon = get_icon(p, c)
+                self.assertIsNotNone(icon)
+                self.assertIn("key", icon)
+                self.assertIn("svg", icon)
+                self.assertIn("data_url", icon)
+                self.assertTrue(icon["svg"].startswith("<svg"))
+                self.assertTrue(icon["data_url"].startswith("data:image/svg+xml;base64,"))
+                self.assertTrue(len(icon["provider_badge"]) > 0)
 
     def test_end_to_end_cli(self):
         out_dir = BASE_DIR / "tests" / "output_test"

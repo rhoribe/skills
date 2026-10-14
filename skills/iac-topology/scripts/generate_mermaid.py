@@ -10,6 +10,16 @@ import re
 import argparse
 from pathlib import Path
 
+# Icon registry import
+try:
+    from icons import get_icon
+except ImportError:
+    try:
+        from .icons import get_icon
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from icons import get_icon
+
 
 def sanitize_id(raw_id: str) -> str:
     """Sanitize string for Mermaid node ID."""
@@ -56,17 +66,24 @@ class MermaidGenerator:
             if not g_nodes:
                 continue
             g_info = groups[gid]
+            g_provider = g_info.get("provider", "generic")
+            g_icon = get_icon(g_provider, "management")
             g_label = sanitize_text(g_info.get("label", gid))
             s_gid = sanitize_id(gid)
 
-            lines.append(f'    subgraph {s_gid} ["{g_label}"]')
+            lines.append(f'    subgraph {s_gid} ["{g_icon["provider_badge"]} {g_label}"]')
             for node in g_nodes:
                 nid = sanitize_id(node["id"])
                 name = sanitize_text(node.get("name", "unnamed"))
                 dtype = sanitize_text(node.get("display_type", node.get("type", "Resource")))
                 props = node.get("properties", {})
                 prop_str = f"<br/><small>{sanitize_text(str(next(iter(props.values()))))}</small>" if props else ""
-                lines.append(f'        {nid}["<b>{name}</b><br/>{dtype}{prop_str}"]')
+                
+                icon = node.get("icon") or get_icon(node.get("provider", "generic"), node.get("category", "management"), node.get("type", ""))
+                fa_prefix = f"{icon['fa']} " if icon.get("fa") else ""
+                badge = f"{icon['provider_badge']} " if icon.get("provider_badge") else ""
+                
+                lines.append(f'        {nid}["{fa_prefix}{badge}<b>{name}</b><br/>{dtype}{prop_str}"]')
                 node_classes[nid] = node.get("provider", "generic")
             lines.append("    end")
             lines.append("")
@@ -80,7 +97,12 @@ class MermaidGenerator:
                 dtype = sanitize_text(node.get("display_type", node.get("type", "Resource")))
                 props = node.get("properties", {})
                 prop_str = f"<br/><small>{sanitize_text(str(next(iter(props.values()))))}</small>" if props else ""
-                lines.append(f'        {nid}["<b>{name}</b><br/>{dtype}{prop_str}"]')
+                
+                icon = node.get("icon") or get_icon(node.get("provider", "generic"), node.get("category", "management"), node.get("type", ""))
+                fa_prefix = f"{icon['fa']} " if icon.get("fa") else ""
+                badge = f"{icon['provider_badge']} " if icon.get("provider_badge") else ""
+                
+                lines.append(f'        {nid}["{fa_prefix}{badge}<b>{name}</b><br/>{dtype}{prop_str}"]')
                 node_classes[nid] = node.get("provider", "generic")
             lines.append("    end")
             lines.append("")

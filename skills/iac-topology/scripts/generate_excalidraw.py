@@ -11,6 +11,16 @@ import argparse
 import random
 from pathlib import Path
 
+# Icon registry import
+try:
+    from icons import get_icon
+except ImportError:
+    try:
+        from .icons import get_icon
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from icons import get_icon
+
 
 # Semantic color palettes
 PALETTES = {
@@ -76,6 +86,7 @@ class ExcalidrawGenerator:
     def __init__(self, ir_data: dict):
         self.ir = ir_data
         self.elements = []
+        self.files = {}
         self.seed_counter = 100000
 
     def next_seed(self):
@@ -179,7 +190,7 @@ class ExcalidrawGenerator:
                 ungrouped_nodes.append(node)
 
         # Layout parameters
-        NODE_W = 240
+        NODE_W = 250
         NODE_H = 85
         COL_GAP = 40
         ROW_GAP = 30
@@ -199,6 +210,7 @@ class ExcalidrawGenerator:
             
             g_info = groups[gid]
             g_provider = g_info.get("provider", "generic")
+            g_badge = "☁️" if g_provider == "aws" else "🔷" if g_provider == "azure" else "🟢" if g_provider == "gcp" else "☸️" if g_provider == "kubernetes" else "⬡"
             
             cols = min(3, max(1, math.ceil(math.sqrt(len(g_nodes)))))
             rows = math.ceil(len(g_nodes) / cols)
@@ -262,13 +274,13 @@ class ExcalidrawGenerator:
                 "updated": 1,
                 "link": None,
                 "locked": False,
-                "text": f"⬡ {g_info.get('label', gid)}",
+                "text": f"{g_badge} {g_info.get('label', gid)}",
                 "fontSize": 16,
                 "fontFamily": 1,
                 "textAlign": "left",
                 "verticalAlign": "top",
                 "containerId": None,
-                "originalText": f"⬡ {g_info.get('label', gid)}",
+                "originalText": f"{g_badge} {g_info.get('label', gid)}",
                 "lineHeight": 1.25
             })
 
@@ -387,17 +399,31 @@ class ExcalidrawGenerator:
                 "gridSize": 20,
                 "viewBackgroundColor": "#ffffff"
             },
-            "files": {}
+            "files": self.files
         }
 
     def _render_node(self, node: dict, x: float, y: float, w: float, h: float, group_ids: list):
         node_id = f"node_{node['id']}"
         text_id = f"text_{node['id']}"
+        icon_id = f"icon_{node['id']}"
+        node_group_ids = group_ids + [node_id]
+
         provider = node.get("provider", "generic")
         category = node.get("category", "management")
         colors = get_colors(provider, category)
 
-        # Node Box
+        # Retrieve icon metadata and register file in Excalidraw
+        icon = node.get("icon") or get_icon(provider, category, node.get("type", ""))
+        file_id = f"file_{icon['key']}"
+        if file_id not in self.files:
+            self.files[file_id] = {
+                "mimeType": "image/svg+xml",
+                "id": file_id,
+                "dataURL": icon["data_url"],
+                "created": 1
+            }
+
+        # Node Container Box
         self.elements.append({
             "id": node_id,
             "type": "rectangle",
@@ -413,7 +439,7 @@ class ExcalidrawGenerator:
             "strokeStyle": "solid",
             "roughness": 1,
             "opacity": 100,
-            "groupIds": group_ids,
+            "groupIds": node_group_ids,
             "roundness": {"type": 3},
             "seed": self.next_seed(),
             "version": 1,
@@ -425,6 +451,37 @@ class ExcalidrawGenerator:
             "locked": False
         })
 
+        # Icon Image inside Node
+        self.elements.append({
+            "id": icon_id,
+            "type": "image",
+            "x": x + 12,
+            "y": y + 20,
+            "width": 44,
+            "height": 44,
+            "angle": 0,
+            "strokeColor": "transparent",
+            "backgroundColor": "transparent",
+            "fillStyle": "solid",
+            "strokeWidth": 1,
+            "strokeStyle": "solid",
+            "roughness": 0,
+            "opacity": 100,
+            "groupIds": node_group_ids,
+            "roundness": None,
+            "seed": self.next_seed(),
+            "version": 1,
+            "versionNonce": 1,
+            "isDeleted": False,
+            "boundElements": None,
+            "updated": 1,
+            "link": None,
+            "locked": False,
+            "status": "saved",
+            "fileId": file_id,
+            "scale": [1, 1]
+        })
+
         # Formatted Node Content
         display_type = node.get("display_type", node.get("type", "Resource"))
         name = node.get("name", "unnamed")
@@ -433,13 +490,13 @@ class ExcalidrawGenerator:
 
         full_text = f"{name}\n[{display_type}]{prop_str}"
 
-        # Label inside Node
+        # Label inside Node (offset right to leave space for icon)
         self.elements.append({
             "id": text_id,
             "type": "text",
-            "x": x + 10,
+            "x": x + 64,
             "y": y + 16,
-            "width": w - 20,
+            "width": w - 74,
             "height": h - 32,
             "angle": 0,
             "strokeColor": "#1e1e1e",
@@ -449,7 +506,7 @@ class ExcalidrawGenerator:
             "strokeStyle": "solid",
             "roughness": 1,
             "opacity": 100,
-            "groupIds": group_ids,
+            "groupIds": node_group_ids,
             "roundness": None,
             "seed": self.next_seed(),
             "version": 1,
@@ -460,14 +517,15 @@ class ExcalidrawGenerator:
             "link": None,
             "locked": False,
             "text": full_text,
-            "fontSize": 14,
+            "fontSize": 13,
             "fontFamily": 1,
-            "textAlign": "center",
+            "textAlign": "left",
             "verticalAlign": "middle",
-            "containerId": node_id,
+            "containerId": None,
             "originalText": full_text,
             "lineHeight": 1.25
         })
+
 
     def _render_edge(self, idx: int, edge: dict, src_pos, dst_pos, src_id: str, dst_id: str):
         sx, sy, sw, sh = src_pos

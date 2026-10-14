@@ -23,6 +23,17 @@ try:
 except ImportError:
     HAS_YAML = False
 
+# Icon registry import
+try:
+    from icons import get_icon
+except ImportError:
+    try:
+        from .icons import get_icon
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from icons import get_icon
+
+
 
 def detect_provider(res_type: str) -> str:
     """Infer cloud provider from resource type string."""
@@ -116,6 +127,8 @@ class IaCParser:
         if not display_type:
             display_type = res_type
 
+        icon_data = get_icon(provider, category, res_type)
+
         self.nodes[node_id] = {
             "id": node_id,
             "name": name,
@@ -124,7 +137,8 @@ class IaCParser:
             "provider": provider,
             "category": category,
             "group_id": group_id,
-            "properties": properties or {}
+            "properties": properties or {},
+            "icon": icon_data
         }
 
     def add_edge(self, source: str, target: str, label: str = "depends_on", edge_type: str = "reference"):

@@ -12,6 +12,16 @@ import html
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+# Icon registry import
+try:
+    from icons import get_icon
+except ImportError:
+    try:
+        from .icons import get_icon
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from icons import get_icon
+
 
 PALETTES = {
     "aws": {
@@ -127,7 +137,7 @@ class DrawioGenerator:
             else:
                 ungrouped_nodes.append(node)
 
-        NODE_W = 210
+        NODE_W = 220
         NODE_H = 80
         COL_GAP = 30
         ROW_GAP = 25
@@ -145,6 +155,7 @@ class DrawioGenerator:
             g_info = groups[gid]
             provider = g_info.get("provider", "generic")
             g_colors = PALETTES.get(provider, PALETTES["generic"])["group"]
+            g_badge = "☁️" if provider == "aws" else "🔷" if provider == "azure" else "🟢" if provider == "gcp" else "☸️" if provider == "kubernetes" else "⬡"
 
             cols = min(3, max(1, math.ceil(math.sqrt(len(g_nodes)))))
             rows = math.ceil(len(g_nodes) / cols)
@@ -153,7 +164,7 @@ class DrawioGenerator:
             gh = rows * NODE_H + (rows - 1) * ROW_GAP + PAD_Y + 40
 
             group_cell_id = f"group_{gid}"
-            g_label = html.escape(f"⬡ {g_info.get('label', gid)}")
+            g_label = html.escape(f"{g_badge} {g_info.get('label', gid)}")
             g_style = f"swimlane;whiteSpace=wrap;html=1;startSize=28;fillColor={g_colors['bg']};strokeColor={g_colors['stroke']};strokeWidth=2;fontColor=#333333;fontStyle=1;rounded=1;shadow=0;"
             
             g_cell = ET.SubElement(root, "mxCell", {
@@ -250,26 +261,62 @@ class DrawioGenerator:
         category = node.get("category", "management")
         colors = get_colors(provider, category)
 
+        icon = node.get("icon") or get_icon(provider, category, node.get("type", ""))
+
         name = html.escape(node.get("name", "unnamed"))
         display_type = html.escape(node.get("display_type", node.get("type", "Resource")))
         props = node.get("properties", {})
         prop_str = f"&lt;br&gt;&lt;font color=&quot;#666666&quot; style=&quot;font-size: 10px;&quot;&gt;{html.escape(str(next(iter(props.values()))))}&lt;/font&gt;" if props else ""
 
-        value = f"&lt;b&gt;{name}&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#444444&quot; style=&quot;font-size: 11px;&quot;&gt;[{display_type}]&lt;/font&gt;{prop_str}"
-        style = f"rounded=1;whiteSpace=wrap;html=1;fillColor={colors['bg']};strokeColor={colors['stroke']};strokeWidth=2;fontColor=#212529;shadow=0;"
-
-        cell = ET.SubElement(root, "mxCell", {
+        # Outer card container
+        card_style = f"rounded=1;whiteSpace=wrap;html=1;fillColor={colors['bg']};strokeColor={colors['stroke']};strokeWidth=2;shadow=0;"
+        card_cell = ET.SubElement(root, "mxCell", {
             "id": node_id,
-            "value": value,
-            "style": style,
+            "value": "",
+            "style": card_style,
             "vertex": "1",
             "parent": parent_id
         })
-        ET.SubElement(cell, "mxGeometry", {
+        ET.SubElement(card_cell, "mxGeometry", {
             "x": str(x),
             "y": str(y),
             "width": str(w),
             "height": str(h),
+            "as": "geometry"
+        })
+
+        # Icon element inside container (relative coordinates)
+        icon_style = f"shape=image;html=1;verticalAlign=middle;labelBackgroundColor=none;imageAspect=1;aspect=fixed;image={icon['data_url']};"
+        icon_cell = ET.SubElement(root, "mxCell", {
+            "id": f"icon_{node['id']}",
+            "value": "",
+            "style": icon_style,
+            "vertex": "1",
+            "parent": node_id
+        })
+        ET.SubElement(icon_cell, "mxGeometry", {
+            "x": "12",
+            "y": "18",
+            "width": "44",
+            "height": "44",
+            "as": "geometry"
+        })
+
+        # Text label inside container (relative coordinates)
+        label_val = f"&lt;b style=&quot;font-size: 13px;&quot;&gt;{name}&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#444444&quot; style=&quot;font-size: 11px;&quot;&gt;[{display_type}]&lt;/font&gt;{prop_str}"
+        label_style = "text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;"
+        lbl_cell = ET.SubElement(root, "mxCell", {
+            "id": f"lbl_{node['id']}",
+            "value": label_val,
+            "style": label_style,
+            "vertex": "1",
+            "parent": node_id
+        })
+        ET.SubElement(lbl_cell, "mxGeometry", {
+            "x": "62",
+            "y": "10",
+            "width": str(w - 70),
+            "height": "60",
             "as": "geometry"
         })
 

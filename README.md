@@ -32,7 +32,7 @@ npx skills add rhoribe/skills --agent claude-code antigravity cursor
 
 | Skill | Descrição | Formatos & Plataformas |
 |---|---|---|
-| [`iac-topology`](./skills/iac-topology/SKILL.md) | Gera diagramas e desenhos de topologia de arquitetura em nuvem diretamente de código IaC (**Terraform**, **CloudFormation**, **Azure Bicep**, **Ansible**, **Kubernetes**), exportando para **Excalidraw**, **Draw.io** e **Mermaid**. | **Excalidraw** (`.excalidraw`), **Draw.io** (`.drawio`), **Mermaid** (`.mmd`) / Multiplataforma |
+| [`iac-topology`](./skills/iac-topology/SKILL.md) | Gera diagramas e desenhos de topologia de arquitetura em nuvem diretamente de código IaC (**Terraform**, **CloudFormation**, **Azure Bicep**, **Ansible**, **Kubernetes**), exportando para **Excalidraw**, **Draw.io** e **Mermaid** com ícones vetoriais de cloud providers (**AWS**, **Azure**, **GCP**, **Kubernetes**). | **Excalidraw** (`.excalidraw`), **Draw.io** (`.drawio`), **Mermaid** (`.mmd`) / Multiplataforma |
 | [`os-update`](./skills/os-update/SKILL.md) | Fluxo automatizado e seguro (*dry-run first*) para inspecionar, preparar e aplicar atualizações de SO e pacotes com diagnósticos de segurança e alerta de reboot. | **Linux** (Debian, Ubuntu, Fedora, RHEL, Arch, openSUSE, Alpine, Flatpak, Snap) & **macOS** (`softwareupdate`, Homebrew, MAS) |
 
 ---
@@ -46,10 +46,11 @@ As skills implementam a especificação oficial de **Agent Skills** ([agentskill
 skills/iac-topology/
 ├── SKILL.md                          # Instruções para o agente (5 fases de execução)
 ├── scripts/                          # Utilitários de parsing e renderização de diagramas
+│   ├── icons.py                      # Registro e renderizador de ícones vetoriais SVG de cloud providers
 │   ├── parse_iac.py                  # Parser universal (Terraform, CloudFormation, Bicep, Ansible, K8s)
-│   ├── generate_excalidraw.py        # Gerador nativo Excalidraw v2 com auto-layout e paletas por nuvem
-│   ├── generate_drawio.py            # Gerador nativo Draw.io / mxGraphModel com swimlanes e nós estilizados
-│   ├── generate_mermaid.py           # Gerador de flowcharts Mermaid para preview imediato em Markdown
+│   ├── generate_excalidraw.py        # Gerador nativo Excalidraw v2 com auto-layout, paletas e ícones SVG
+│   ├── generate_drawio.py            # Gerador nativo Draw.io com cards compostos e ícones vetoriais
+│   ├── generate_mermaid.py           # Gerador de flowcharts Mermaid com FontAwesome e emblemas de cloud
 │   └── iac_topology.sh               # CLI unificada para geração de diagramas
 └── references/                       # Guias de parsing e especificações de formato
     ├── terraform.md                  # HCL, módulos, recursos e terraform show -json
